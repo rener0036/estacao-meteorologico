@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estação Meteorológica</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>🌦️ Estação Meteorológica</h1>
+    <div class="sub">Análise em tempo real de temperatura, umidade, pressão, vento e qualidade do ar (CO)</div>
+    <div class="location" id="stationLocation">📍 Localizando estação…</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="tabRealtime">Tempo Real</button>
+  <button class="tab-btn" data-tab="tabForecast">Previsão do Tempo</button>
+  <button class="tab-btn" data-tab="tabMonthly">Histórico Mensal</button>
+  <button class="tab-btn" data-tab="tabInmet">Comparação Regional (MG)</button>
+  <button class="tab-btn" data-tab="tabSatellite">Satélite (INPE/CPTEC)</button>
+  <button class="tab-btn" data-tab="tabCemaden">Alertas CEMADEN</button>
+</div>
+
+<!-- ===================== ABA TEMPO REAL ===================== -->
+<div class="tab-panel active" id="tabRealtime">
+  <div class="toolbar">
+    <div class="group">
+      <span class="group-label">Atualização:</span>
+      <button class="btn active" data-interval="30000" id="btn30s">30s</button>
+      <button class="btn" data-interval="60000" id="btn1m">1min</button>
+      <button class="btn" data-interval="auto" id="btnAuto">Auto</button>
+    </div>
+  </div>
+  <div id="loadError"></div>
+  <div class="status-bar" id="statusBar">
+    <span>📡 Última atualização: <strong id="lastFeedTime" class="transition-opacity">carregando…</strong></span>
+    <span>🔢 Pontos analisados hoje: <strong id="pointsCount">—</strong></span>
+    <span>📊 Pontos no cálculo CO: <strong id="coPointsCount">—</strong></span>
+    <span>🚫 Outliers de vento: <strong id="windOutlierCount">—</strong></span>
+    <span>🔁 Polling: <strong id="currentInterval">detectando…</strong></span>
+  </div>
+
+  <section>
+    <h2>Temperatura (field1 °C)</h2>
+    <div class="grid cols-3">
+      <div class="card accent-min"><div class="label">Mínima</div><div class="value"><span id="tempMin">—</span><small>°C</small></div></div>
+      <div class="card accent-avg"><div class="label">Média</div><div class="value"><span id="tempAvg">—</span><small>°C</small></div></div>
+      <div class="card accent-max"><div class="label">Máxima</div><div class="value"><span id="tempMax">—</span><small>°C</small></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Umidade (field2) e Pressão (field3)</h2>
+    <div class="grid cols-4">
+      <div class="card"><div class="label">Umidade</div><div class="value"><span id="humNow">—</span><small>%</small></div><div class="foot" id="humTime">—</div></div>
+      <div class="card"><div class="label">Variação</div><div class="value" id="humRange">— a —</div></div>
+      <div class="card"><div class="label">Pressão</div><div class="value"><span id="presNow">—</span><small>hPa</small></div><div class="foot" id="presTime">—</div></div>
+      <div class="card"><div class="label">Variação</div><div class="value" id="presRange">— a —</div></div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <div class="bar-row"><div class="bar-label">Umidade (%)</div><div class="bar-track"><div class="bar-fill" id="humBar" style="width:0%;"></div></div></div>
+      <div class="bar-row"><div class="bar-label">Pressão (hPa)</div><div class="bar-track"><div class="bar-fill" id="presBar" style="width:0%;"></div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Vento (field4)</h2>
+    <div class="grid cols-2">
+      <div class="card accent-good"><div class="label">Velocidade</div><div class="value" id="windNow">—</div><div class="foot" id="windNowTime">—</div></div>
+      <div class="card accent-warn"><div class="label">Rajada (válida)</div><div class="value" id="windGust">—</div><div class="foot" id="windGustTime">—</div></div>
+    </div>
+    <div class="card" id="windOutlierCard" style="margin-top:14px; display:none;">
+      <div class="label">⚠️ Leituras de vento descartadas como outlier</div>
+      <div class="limits" id="windOutlierDetail">—</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>CO (field7, média móvel 8h — Portaria CONAMA 506/2024)</h2>
+    <div class="grid cols-3">
+      <div class="card"><div class="label">Atual</div><div class="value"><span id="coNow">—</span><small>ppm</small></div><div class="foot" id="coNowTime">—</div></div>
+      <div class="card" id="coCardAvg"><div class="label">Média 8h</div><div class="value"><span id="coMovAvg">—</span><small>ppm</small></div><div class="foot" id="coStatus">—</div></div>
+      <div class="card"><div class="label">Padrão final</div><div class="value">9<small>ppm</small></div></div>
+    </div>
+    <div class="co-gauge"><div class="track" id="coGaugeTrack"><div class="marker" id="coGaugeMarker" style="left:0%;"></div></div></div>
+    <div class="card" style="margin-top:14px;">
+      <div class="label">Diagnóstico da janela de 8h (auditoria)</div>
+      <div class="limits" id="coDiagnostics">—</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Leituras estratégicas</h2>
+    <div class="card"><ul class="insight" id="insightsList"><li>Carregando dados…</li></ul></div>
+  </section>
+
+  <section>
+    <h2>Limitações da Base</h2>
+    <div class="card"><div class="limits" id="limitsBox">Avaliando cobertura dos dados…</div></div>
+  </section>
+
+  <section>
+    <h2>Últimas leituras</h2>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Horário</th><th>Temp</th><th>Umid</th><th>Press</th><th>Vento</th><th>CO</th></tr></thead>
+        <tbody id="tableBody"><tr><td colspan="6" class="text-muted">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== ABA PREVISÃO DO TEMPO ===================== -->
+<div class="tab-panel" id="tabForecast">
+  <!-- O conteúdo se mantém igual ao original, formatado -->
+  <section>
+    <h2>Previsão Heurística de Curto Prazo</h2>
+    <div class="card">
+      <div class="forecast-hero">
+        <div class="forecast-icon" id="forecastIcon">🔄</div>
+        <div>
+          <div class="forecast-main-label" id="forecastMainLabel">Calculando previsão…</div>
+          <div class="forecast-main-sub" id="forecastMainSub">Aguardando dados do canal</div>
+        </div>
+        <div class="forecast-score-badge">
+          <div class="forecast-score-value" id="forecastScoreValue">—</div>
+          <div class="forecast-score-label">Score de instabilidade (0–100)</div>
+        </div>
+      </div>
+      <div class="disclaimer" style="margin-top:14px;">
+        ⚠️ Previsão heurística baseada em temperatura, umidade relativa, ponto de orvalho, pressão atmosférica e vento. Não é meteorologia numérica oficial.
+      </div>
+    </div>
+  </section>
+  <section>
+    <h2>Sinais de Entrada (últimas leituras válidas)</h2>
+    <div class="subvals-grid">
+      <div class="subval-card"><div class="sv-label">Temperatura Atual</div><div class="sv-value" id="fTempNow">—</div><div class="sv-foot" id="fTempTime">—</div></div>
+      <div class="subval-card"><div class="sv-label">Umidade Relativa</div><div class="sv-value" id="fHumNow">—</div><div class="sv-foot" id="fHumTime">—</div></div>
+      <div class="subval-card"><div class="sv-label">Ponto de Orvalho</div><div class="sv-value" id="fDewNow">—</div><div class="sv-foot">Fórmula Magnus-Tetens</div></div>
+      <div class="subval-card"><div class="sv-label">Depressão Ponto Orvalho</div><div class="sv-value" id="fDewDepr">—</div><div class="sv-foot">Temperatura − Ponto de orvalho</div></div>
+      <div class="subval-card"><div class="sv-label">Pressão Atmosférica</div><div class="sv-value" id="fPresNow">—</div><div class="sv-foot" id="fPresTime">—</div></div>
+      <div class="subval-card"><div class="sv-label">Tendência de Pressão</div><div class="sv-value" id="fPresTrend">—</div><div class="sv-foot">Variação na janela recente</div></div>
+      <div class="subval-card"><div class="sv-label">Velocidade do Vento</div><div class="sv-value" id="fWindNow">—</div><div class="sv-foot" id="fWindTime">—</div></div>
+      <div class="subval-card"><div class="sv-label">Tendência de Umidade</div><div class="sv-value" id="fHumTrend">—</div><div class="sv-foot">Variação na janela recente</div></div>
+    </div>
+  </section>
+  <section>
+    <h2>Fatores que Compõem o Score</h2>
+    <div class="card">
+      <div class="equation-box"><span class="eq-title">Modelo heurístico (soma ponderada, 0–100)</span>Score = w1·f(Depressão orvalho) + w2·f(Umidade) + w3·f(Tendência Umidade) + w4·f(Queda Pressão) − w5·f(Vento)</div>
+      <div id="forecastFactors"><div class="loading-box">Calculando fatores…</div></div>
+    </div>
+  </section>
+  <section><h2>Leituras Estratégicas</h2><div class="card"><ul class="insight" id="forecastInsights"><li class="text-muted">Aguardando dados…</li></ul></div></section>
+  <section><h2>Limitações</h2><div class="card"><div class="limits" id="forecastLimits">—</div></div></section>
+</div>
+
+<!-- ===================== ABA HISTÓRICO MENSAL ===================== -->
+<div class="tab-panel" id="tabMonthly">
+  <section>
+    <h2>Temperatura Mensal — Últimos 12 Meses (Mínima, Média e Máxima)</h2>
+    <div class="card">
+      <div class="label" style="margin-bottom:10px;">
+        Fonte: field1. Requisições em paralelo implementadas para carregamento rápido.
+      </div>
+      <div id="monthlyLoading" class="loading-box">
+        Coletando histórico dos últimos 12 meses…
+        <div class="progress-track"><div class="progress-fill" id="monthlyProgress"></div></div>
+        <div class="progress-status" id="monthlyProgressStatus">Iniciando…</div>
+      </div>
+      <div id="monthlyChartWrap" style="display:none;">
+        <div class="monthly-chart-title">Temperatura mensal (°C)</div>
+        <div class="monthly-chart-sub" id="monthlyChartSub">Últimos 12 meses calendário.</div>
+        <div class="monthly-chart-container">
+          <div class="monthly-chart-grid" id="monthlyChart"></div>
+        </div>
+        <div class="monthly-chart-legend">
+          <span><i class="legend-dot dot-min"></i> Mínima</span>
+          <span><i class="legend-dot dot-avg"></i> Média</span>
+          <span><i class="legend-dot dot-max"></i> Máxima</span>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="tab-btn" id="btnReloadMonthly" style="display:none; border:1px solid var(--border); border-radius:20px;">🔄 Recarregar Histórico</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px; overflow-x:auto;">
+      <table id="monthlyTable" style="display:none;">
+        <thead><tr><th>Mês</th><th>Mín (°C)</th><th>Média (°C)</th><th>Máx (°C)</th><th>Leituras</th><th>Status</th></tr></thead>
+        <tbody id="monthlyTableBody"></tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:14px;"><div class="limits" id="monthlyLimits">—</div></div>
+  </section>
+</div>
+
+<!-- ===================== ABA COMPARAÇÃO REGIONAL ===================== -->
+<div class="tab-panel" id="tabInmet">
+  <section>
+    <h2>Comparação com Open-Meteo (dados regionais)</h2>
+    <div class="card">
+      <div class="label" id="inmetSourceLabel" style="margin-bottom:8px;">Consultando API Open-Meteo…</div>
+      <div id="inmetStatus" class="loading-box">Aguardando abertura desta aba…</div>
+      <div id="inmetContent" style="display:none;"></div>
+    </div>
+  </section>
+  <section>
+    <h2>Tabela Comparativa</h2>
+    <div class="card" style="overflow-x:auto;">
+      <table id="inmetCompareTable" style="display:none;">
+        <thead><tr><th>Variável</th><th>Sensor Local</th><th>Horário Local</th><th>Open-Meteo</th><th>Horário Ref.</th><th>Diferença</th></tr></thead>
+        <tbody id="inmetCompareBody"></tbody>
+      </table>
+    </div>
+  </section>
+  <section><h2>Leituras Estratégicas</h2><div class="card"><ul class="insight" id="inmetInsights"><li class="text-muted">Aguardando dados…</li></ul></div></section>
+  <section><h2>Limitações</h2><div class="card"><div class="limits" id="inmetLimits">—</div></div></section>
+</div>
+
+<!-- ===================== ABA SATÉLITE ===================== -->
+<div class="tab-panel" id="tabSatellite">
+  <section>
+    <h2>Imagens de Satélite — INPE/CPTEC</h2>
+    <div class="card">
+      <div class="ext-controls">
+        <button class="btn active" id="satBtnTrueColor" data-product="true_color_ch13_dsa">True Color</button>
+        <button class="btn" id="satBtnIR" data-product="ch13_dsa">Infravermelho (IR)</button>
+      </div>
+      <div class="ext-frame-wrap" id="satFrameWrap">
+        <div class="ext-fallback" id="satFallback">
+          🛰️ Clique no botão abaixo para carregar o visualizador do INPE.<br><br>
+          <button class="btn" id="satLoadBtn">📡 Carregar imagem de satélite</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== ABA CEMADEN ===================== -->
+<div class="tab-panel" id="tabCemaden">
+  <section>
+    <h2>Alertas de Desastres — CEMADEN</h2>
+    <div class="card">
+      <div class="ext-controls">
+        <button class="btn active" id="cemadenBtnMapa" data-view="mapa">Mapa Interativo</button>
+        <button class="btn" id="cemadenBtnAlertas" data-view="alertas">Portal de Alertas</button>
+      </div>
+      <div class="ext-frame-wrap" id="cemadenFrameWrap">
+        <div class="ext-fallback" id="cemadenFallback">
+          🚨 Clique no botão abaixo para carregar o portal oficial.<br><br>
+          <button class="btn" id="cemadenLoadBtn">📡 Carregar alertas do CEMADEN</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
